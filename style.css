@@ -1,0 +1,29 @@
+h1 {
+    color: black;
+}
+
+.col-12 {
+    color: darkslategray;
+    text-align: end;
+}
+
+body {
+    background-color: rgb(231, 228, 222);
+}
+
+.form-control {
+    background-color: lightgray;
+}
+
+.btn-check:checked + .btn {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0a58ca;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.5);
+    font-weight: bold;
+}
+
+.btn-outline-primary {
+  min-width: 100px;
+  text-align: center;
+}
