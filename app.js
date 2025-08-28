@@ -193,18 +193,36 @@ async function handlePdfDownload() {
             }
         }
 
-        const rows = (data || []).map((r, i) => [
-            i + 1,
-            r.adSoyad || r.isim || "",
-            r.bolum || "",
-            r.durak || "",
-            r.gun || "",
-            r.vardiya || "",
-            (() => {
-                const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                return ts ? new Date(ts).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) : "";
-            })()
-        ]);
+        // Verileri tarih damgasını Supabase'ten olduğu gibi (istemci yerel saat dilimi) alarak sırala ve grupla
+        const normalized = (data || []).map((r) => ({
+            adSoyad: r.adSoyad || r.isim || "",
+            bolum: r.bolum || "",
+            durak: r.durak || "",
+            gun: r.gun || "",
+            vardiya: r.vardiya || "",
+            createdAt: r.created_at || r.createdAt || r.inserted_at || r.insertedAt || null
+        }));
+
+        // Sıralama: gün, vardiya, durak, oluşturulma zamanı
+        normalized.sort((a, b) => {
+            const ag = (a.gun || "").localeCompare(b.gun || "", 'tr');
+            if (ag !== 0) return ag;
+            const av = (a.vardiya || "").localeCompare(b.vardiya || "", 'tr');
+            if (av !== 0) return av;
+            const ad = (a.durak || "").localeCompare(b.durak || "", 'tr');
+            if (ad !== 0) return ad;
+            const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return at - bt;
+        });
+
+        // Gruplama: gün → vardiya → durak
+        const groups = new Map();
+        for (const row of normalized) {
+            const key = `${row.gun}||${row.vardiya}||${row.durak}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(row);
+        }
 
         if (!window.jspdf) {
             alert("jsPDF yüklenemedi. Lütfen sayfayı yenileyin.");
@@ -215,19 +233,61 @@ async function handlePdfDownload() {
         doc.setFontSize(14);
         doc.text("Son 24 Saatte Kaydedilen Personeller", 14, 16);
 
+        let currentY = 22;
         if (doc.autoTable) {
-            doc.autoTable({
-                head: [["#", "Ad Soyad", "Bölüm", "Durak", "Gün", "Vardiya", "Oluşturulma"]],
-                body: rows,
-                startY: 22
-            });
+            let sectionIndex = 1;
+            for (const [key, items] of groups.entries()) {
+                const [g, v, d] = key.split('||');
+                const header = `Grup ${sectionIndex}: Gün=${g || '-'} | Vardiya=${v || '-'} | Durak=${d || '-'}`;
+                doc.setFontSize(12);
+                doc.text(header, 14, currentY);
+                const body = items.map((it, i) => [
+                    i + 1,
+                    it.adSoyad,
+                    it.bolum,
+                    // durak/vardiya/gün başlıkta var; yine de tabloya eklemek istenirse yorum satırına alınabilir
+                    // it.durak,
+                    // it.gun,
+                    // it.vardiya,
+                    it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : ""
+                ]);
+                doc.autoTable({
+                    head: [["#", "Ad Soyad", "Bölüm", "Oluşturulma"]],
+                    body,
+                    startY: currentY + 4,
+                    margin: { left: 14, right: 14 },
+                    styles: { fontSize: 10 }
+                });
+                currentY = doc.lastAutoTable.finalY + 8;
+                // Yeni sayfaya taşarsa başlığı üstte hizala
+                if (currentY > 280) {
+                    doc.addPage();
+                    currentY = 16;
+                }
+                sectionIndex += 1;
+            }
         } else {
-            // AutoTable yoksa basit liste
-            let y = 24;
-            rows.forEach(r => {
-                doc.text(r.join(" | "), 14, y);
-                y += 8;
-            });
+            // AutoTable yoksa basit liste, gruplayarak yaz
+            let y = currentY;
+            let sectionIndex = 1;
+            for (const [key, items] of groups.entries()) {
+                const [g, v, d] = key.split('||');
+                const header = `Grup ${sectionIndex}: Gün=${g || '-'} | Vardiya=${v || '-'} | Durak=${d || '-'}`;
+                doc.setFontSize(12);
+                doc.text(header, 14, y);
+                y += 6;
+                items.forEach((it, i) => {
+                    const line = `${i + 1} | ${it.adSoyad} | ${it.bolum} | ${(it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : "")}`;
+                    doc.text(line, 16, y);
+                    y += 6;
+                    if (y > 280) {
+                        doc.addPage();
+                        y = 16;
+                    }
+                });
+                y += 6;
+                sectionIndex += 1;
+            }
         }
 
         doc.save("son24saat_secilen_personeller.pdf");
