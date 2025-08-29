@@ -161,67 +161,142 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
     // await sendDataToSupabase();
 });
 
+// Son 24 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
+async function fetchLast24hNormalizedSorted() {
+    const now = new Date();
+    const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    let data = [];
+    let query = sb.from(HEDEF_TABLO).select("*");
+    try {
+        const res = await query.gte('created_at', yesterdayIso);
+        if (res.error && res.error.code === '42703') {
+            // created_at yoksa tümünü çek ve client-side filtrele
+            const resAll = await sb.from(HEDEF_TABLO).select("*");
+            if (resAll.error) throw resAll.error;
+            data = (resAll.data || []).filter(r => {
+                const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
+                return ts ? new Date(ts).getTime() >= (now.getTime() - 24 * 60 * 60 * 1000) : true;
+            });
+        } else if (res.error) {
+            throw res.error;
+        } else {
+            data = res.data || [];
+        }
+    } catch (err) {
+        throw err;
+    }
+
+    const normalized = (data || []).map((r) => ({
+        adSoyad: r.adSoyad || r.isim || "",
+        bolum: r.bolum || "",
+        durak: r.durak || "",
+        gun: r.gun || "",
+        vardiya: r.vardiya || "",
+        createdAt: r.created_at || r.createdAt || r.inserted_at || r.insertedAt || null
+    }));
+
+    normalized.sort((a, b) => {
+        const ag = (a.gun || "").localeCompare(b.gun || "", 'tr');
+        if (ag !== 0) return ag;
+        const av = (a.vardiya || "").localeCompare(b.vardiya || "", 'tr');
+        if (av !== 0) return av;
+        const ad = (a.durak || "").localeCompare(b.durak || "", 'tr');
+        if (ad !== 0) return ad;
+        const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return at - bt;
+    });
+
+    return normalized;
+}
+
+// HTML tabloyu doldur
+async function loadAndRenderTable() {
+    const table = document.getElementById('recordsTable');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+        const normalized = await fetchLast24hNormalizedSorted();
+        const fragment = document.createDocumentFragment();
+        let currentGun = null;
+        let currentVardiya = null;
+        let colorIndex = 0;
+        const dayClasses = [
+            'table-primary',
+            'table-success',
+            'table-warning',
+            'table-info',
+            'table-secondary'
+        ];
+        for (const it of normalized) {
+            if (it.gun !== currentGun) {
+                currentGun = it.gun;
+                currentVardiya = null; // gün değişince vardiya takibini sıfırla
+                const sepTr = document.createElement('tr');
+                const cls = dayClasses[colorIndex % dayClasses.length];
+                sepTr.className = cls;
+                const sepTh = document.createElement('th');
+                sepTh.setAttribute('colspan', '6');
+                sepTh.className = 'text-start';
+                sepTh.textContent = `Gün: ${currentGun || '-'}`;
+                sepTr.appendChild(sepTh);
+                fragment.appendChild(sepTr);
+                colorIndex += 1;
+            }
+            // Vardiya değişimlerinde ince ayraç ekle (aynı gün içinde)
+            if (currentVardiya !== null && it.vardiya !== currentVardiya) {
+                const vSepTr = document.createElement('tr');
+                const vSepTh = document.createElement('th');
+                vSepTh.setAttribute('colspan', '6');
+                vSepTh.className = 'text-start';
+                vSepTh.style.padding = '4px 8px';
+                vSepTh.style.backgroundColor = '#e9ecef';
+                vSepTh.style.borderTop = '2px solid #6c757d';
+                vSepTh.style.borderBottom = '1px solid #dee2e6';
+                vSepTh.style.fontWeight = '500';
+                vSepTh.style.fontSize = '0.9rem';
+                vSepTh.textContent = `Vardiya: ${it.vardiya || '-'}`;
+                vSepTr.appendChild(vSepTh);
+                fragment.appendChild(vSepTr);
+            }
+            currentVardiya = it.vardiya;
+            const tr = document.createElement('tr');
+            const tdGun = document.createElement('td'); tdGun.textContent = it.gun;
+            const tdVardiya = document.createElement('td'); tdVardiya.textContent = it.vardiya;
+            const tdDurak = document.createElement('td'); tdDurak.textContent = it.durak;
+            const tdAdSoyad = document.createElement('td'); tdAdSoyad.textContent = it.adSoyad;
+            const tdBolum = document.createElement('td'); tdBolum.textContent = it.bolum;
+            const tdCreated = document.createElement('td'); tdCreated.textContent = it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : '';
+            tr.appendChild(tdGun);
+            tr.appendChild(tdVardiya);
+            tr.appendChild(tdDurak);
+            tr.appendChild(tdAdSoyad);
+            tr.appendChild(tdBolum);
+            tr.appendChild(tdCreated);
+            fragment.appendChild(tr);
+        }
+        tbody.appendChild(fragment);
+    } catch (err) {
+        console.error('Tablo verileri yüklenirken hata:', err);
+    }
+}
+
 // Son 24 saatte eklenen kayıtları PDF'e aktar
 async function handlePdfDownload() {
     try {
-        const now = new Date();
-        const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-
-        // created_at varsa sunucuda filtrele; yoksa client-side filtre uygula
-        let data = [];
-        {
-            let query = sb.from(HEDEF_TABLO).select("*");
-            try {
-                const res = await query.gte('created_at', yesterdayIso);
-                if (res.error && res.error.code === '42703') {
-                    // created_at kolonu yok → tümünü çek ve client-side filtrele
-                    const resAll = await sb.from(HEDEF_TABLO).select("*");
-                    if (resAll.error) throw resAll.error;
-                    data = (resAll.data || []).filter(r => {
-                        const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                        return ts ? new Date(ts).getTime() >= (now.getTime() - 24 * 60 * 60 * 1000) : true;
-                    });
-                } else if (res.error) {
-                    throw res.error;
-                } else {
-                    data = res.data || [];
-                }
-            } catch (err) {
-                console.error("PDF verileri alınırken hata:", err);
-                alert("PDF için veriler çekilirken bir hata oluştu: " + (err.message || ""));
-                return;
-            }
-        }
-
-        // Verileri tarih damgasını Supabase'ten olduğu gibi (istemci yerel saat dilimi) alarak sırala ve grupla
-        const normalized = (data || []).map((r) => ({
-            adSoyad: r.adSoyad || r.isim || "",
-            bolum: r.bolum || "",
-            durak: r.durak || "",
-            gun: r.gun || "",
-            vardiya: r.vardiya || "",
-            createdAt: r.created_at || r.createdAt || r.inserted_at || r.insertedAt || null
-        }));
-
-        // Sıralama: gün, vardiya, durak, oluşturulma zamanı
-        normalized.sort((a, b) => {
-            const ag = (a.gun || "").localeCompare(b.gun || "", 'tr');
-            if (ag !== 0) return ag;
-            const av = (a.vardiya || "").localeCompare(b.vardiya || "", 'tr');
-            if (av !== 0) return av;
-            const ad = (a.durak || "").localeCompare(b.durak || "", 'tr');
-            if (ad !== 0) return ad;
-            const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return at - bt;
-        });
-
-        // Gruplama: gün → vardiya → durak
-        const groups = new Map();
-        for (const row of normalized) {
-            const key = `${row.gun}||${row.vardiya}||${row.durak}`;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push(row);
+        const normalized = await fetchLast24hNormalizedSorted();
+        const tableRows = [];
+        for (const it of normalized) {
+            tableRows.push([
+                it.gun,
+                it.vardiya,
+                it.durak,
+                it.adSoyad,
+                it.bolum,
+                it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : ""
+            ]);
         }
 
         if (!window.jspdf) {
@@ -235,58 +310,28 @@ async function handlePdfDownload() {
 
         let currentY = 22;
         if (doc.autoTable) {
-            let sectionIndex = 1;
-            for (const [key, items] of groups.entries()) {
-                const [g, v, d] = key.split('||');
-                const header = `Grup ${sectionIndex}: Gün=${g || '-'} | Vardiya=${v || '-'} | Durak=${d || '-'}`;
-                doc.setFontSize(12);
-                doc.text(header, 14, currentY);
-                const body = items.map((it, i) => [
-                    i + 1,
-                    it.adSoyad,
-                    it.bolum,
-                    // durak/vardiya/gün başlıkta var; yine de tabloya eklemek istenirse yorum satırına alınabilir
-                    // it.durak,
-                    // it.gun,
-                    // it.vardiya,
-                    it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : ""
-                ]);
-                doc.autoTable({
-                    head: [["#", "Ad Soyad", "Bölüm", "Oluşturulma"]],
-                    body,
-                    startY: currentY + 4,
-                    margin: { left: 14, right: 14 },
-                    styles: { fontSize: 10 }
-                });
-                currentY = doc.lastAutoTable.finalY + 8;
-                // Yeni sayfaya taşarsa başlığı üstte hizala
-                if (currentY > 280) {
-                    doc.addPage();
-                    currentY = 16;
-                }
-                sectionIndex += 1;
-            }
+            doc.autoTable({
+                head: [["Gün", "Vardiya", "Durak", "Ad Soyad", "Bölüm", "Oluşturulma"]],
+                body: tableRows,
+                startY: currentY,
+                margin: { left: 14, right: 14 },
+                styles: { fontSize: 10 }
+            });
         } else {
-            // AutoTable yoksa basit liste, gruplayarak yaz
+            // AutoTable yoksa basit liste
             let y = currentY;
-            let sectionIndex = 1;
-            for (const [key, items] of groups.entries()) {
-                const [g, v, d] = key.split('||');
-                const header = `Grup ${sectionIndex}: Gün=${g || '-'} | Vardiya=${v || '-'} | Durak=${d || '-'}`;
-                doc.setFontSize(12);
-                doc.text(header, 14, y);
+            doc.setFontSize(10);
+            const header = "Gün | Vardiya | Durak | Ad Soyad | Bölüm | Oluşturulma";
+            doc.text(header, 14, y);
+            y += 6;
+            for (const row of tableRows) {
+                const line = row.join(" | ");
+                doc.text(line, 14, y);
                 y += 6;
-                items.forEach((it, i) => {
-                    const line = `${i + 1} | ${it.adSoyad} | ${it.bolum} | ${(it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : "")}`;
-                    doc.text(line, 16, y);
-                    y += 6;
-                    if (y > 280) {
-                        doc.addPage();
-                        y = 16;
-                    }
-                });
-                y += 6;
-                sectionIndex += 1;
+                if (y > 280) {
+                    doc.addPage();
+                    y = 16;
+                }
             }
         }
 
@@ -302,4 +347,6 @@ if (pdfBtnEl) pdfBtnEl.addEventListener("click", handlePdfDownload);
 document.addEventListener('DOMContentLoaded', () => {
   const b = document.getElementById('pdfBtn');
   if (b) b.addEventListener('click', handlePdfDownload);
+  // Sayfa yüklendiğinde tabloyu doldur
+  loadAndRenderTable();
 });
