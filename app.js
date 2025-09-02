@@ -83,6 +83,9 @@ async function fetchPersonelListesi(bolum) {
         if (personel.durak) {
             li.dataset.durak = personel.durak;
         }
+        if (personel.ilce) {
+            li.dataset.ilce = personel.ilce;
+        }
         
         li.addEventListener("click", () => {
             // Tıklandığında aktif/pasif hale getir ve rengini değiştir
@@ -96,9 +99,12 @@ async function fetchPersonelListesi(bolum) {
     if (personelModal) personelModal.show();
 }
 
+// Geçici veri saklama için global değişken
+let tempPersonelData = [];
+
 // Modal penceresindeki "Kaydet" butonuna tıklama olayı
 const modalKaydetBtn = document.getElementById("modalKaydet");
-if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", async () => {
+if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", () => {
     // Tıklanan ve personel seçilen hücreyi al
     const aktifCell = document.querySelector(".vardiya-cell.active");
     if (!aktifCell) {
@@ -110,7 +116,8 @@ if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", async () => {
     const seciliPersoneller = Array.from(personelListesi.querySelectorAll(".active"))
                                    .map(li => ({
                                        adSoyad: li.textContent.trim(),
-                                       durak: li.dataset.durak || null
+                                       durak: li.dataset.durak || null,
+                                       ilce: li.dataset.ilce || null
                                    }));
 
     // Seçilen personel sayısı 0 ise uyarı ver
@@ -125,64 +132,101 @@ if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", async () => {
     // Hücredeki 'active' class'ını kaldır ve rengini normale döndür
     aktifCell.classList.remove("active"); 
 
-    // Her bir seçilen personel için veritabanına kayıt işlemi yap
+    // Geçici veriye ekle (Supabase'e henüz kaydetme)
     for (const personel of seciliPersoneller) {
         const data = {
             adSoyad: personel.adSoyad,
             gun: aktifCell.dataset.gun,
             vardiya: aktifCell.dataset.vardiya,
             bolum: document.getElementById("bolumSecimi").value,
-            ...(personel.durak ? { durak: personel.durak } : {})
+            ...(personel.durak ? { durak: personel.durak } : {}),
+            ...(personel.ilce ? { ilce: personel.ilce } : {})
         };
-
-        // Supabase'ye POST isteği gönder
-        const { error } = await sb.from(HEDEF_TABLO).insert([data]);
-        
-        // Hata kontrolü
-        if (error) {
-            console.error("Seçilen personel kaydedilirken hata:", error);
-            alert("Personel kaydı sırasında bir hata oluştu: " + (error.message || "Bilinmeyen hata") + "\nLütfen tablonun RLS politikalarının eklemeye izin verdiğini doğrulayın.");
-            break; // Hata durumunda döngüden çık
-        }
+        tempPersonelData.push(data);
     }
     
     // İşlem bitince modal penceresini kapat
     if (personelModal) personelModal.hide();
-    alert("Personeller başarıyla kaydedildi.");
 });
 
-// Gönder butonuna basıldığında tüm verileri Supabase'e gönderme ve 3 dakika bekleme süresi (sadece index14'te mevcut)
+// Gönder butonuna basıldığında tüm geçici verileri Supabase'e gönderme
 const gonderBtn = document.getElementById("gonderBtn");
 if (gonderBtn) gonderBtn.addEventListener("click", async () => {
-    // Bu kısım, tüm verilerinizi Supabase'e gönderecek.
-    // İlk cevabımızda bu işlemi tamamlamıştık.
-    // Lütfen buraya kendi Supabase gönderme mantığınızı tekrar ekleyin.
-    // Örneğin:
-    // await sendDataToSupabase();
+    if (tempPersonelData.length === 0) {
+        alert("Gönderilecek veri bulunamadı. Lütfen önce personel seçimi yapın.");
+        return;
+    }
+    
+    try {
+        // Tüm geçici verileri Supabase'e gönder
+        const { error } = await sb.from(HEDEF_TABLO).insert(tempPersonelData);
+        
+        if (error) {
+            console.error("Veriler gönderilirken hata:", error);
+            alert("Veriler gönderilirken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
+            return;
+        }
+        
+        // Başarılı gönderim sonrası geçici veriyi temizle
+        tempPersonelData = [];
+        
+        // Tüm vardiya hücrelerini sıfırla
+        document.querySelectorAll(".vardiya-cell").forEach(cell => {
+            cell.textContent = "0";
+        });
+        
+        alert("Başarıyla Veriler Gönderildi!");
+    } catch (err) {
+        console.error("Gönderim sırasında hata:", err);
+        alert("Gönderim sırasında bir hata oluştu: " + err.message);
+    }
+});
+
+// Temizle butonuna basıldığında tüm verileri temizle ve sayfayı yenile
+const temizleBtn = document.getElementById("temizleBtn");
+if (temizleBtn) temizleBtn.addEventListener("click", () => {
+    if (confirm("Tüm veriler temizlenecek ve sayfa yenilenecek. Devam etmek istiyor musunuz?")) {
+        // Geçici veriyi temizle
+        tempPersonelData = [];
+        
+        // Tüm vardiya hücrelerini sıfırla
+        document.querySelectorAll(".vardiya-cell").forEach(cell => {
+            cell.textContent = "0";
+        });
+        
+        // Bölüm seçimini sıfırla
+        const bolumSecimi = document.getElementById("bolumSecimi");
+        if (bolumSecimi) {
+            bolumSecimi.value = "";
+        }
+        
+        // Sayfayı yenile
+        location.reload();
+    }
 });
 
 // Son 24 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
 async function fetchLast24hNormalizedSorted() {
-    const now = new Date();
-    const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    let data = [];
-    let query = sb.from(HEDEF_TABLO).select("*");
-    try {
-        const res = await query.gte('created_at', yesterdayIso);
-        if (res.error && res.error.code === '42703') {
+        const now = new Date();
+        const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+        let data = [];
+            let query = sb.from(HEDEF_TABLO).select("*");
+            try {
+                const res = await query.gte('created_at', yesterdayIso);
+                if (res.error && res.error.code === '42703') {
             // created_at yoksa tümünü çek ve client-side filtrele
-            const resAll = await sb.from(HEDEF_TABLO).select("*");
-            if (resAll.error) throw resAll.error;
-            data = (resAll.data || []).filter(r => {
-                const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                return ts ? new Date(ts).getTime() >= (now.getTime() - 24 * 60 * 60 * 1000) : true;
-            });
-        } else if (res.error) {
-            throw res.error;
-        } else {
-            data = res.data || [];
-        }
-    } catch (err) {
+                    const resAll = await sb.from(HEDEF_TABLO).select("*");
+                    if (resAll.error) throw resAll.error;
+                    data = (resAll.data || []).filter(r => {
+                        const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
+                        return ts ? new Date(ts).getTime() >= (now.getTime() - 24 * 60 * 60 * 1000) : true;
+                    });
+                } else if (res.error) {
+                    throw res.error;
+                } else {
+                    data = res.data || [];
+                }
+            } catch (err) {
         throw err;
     }
 
@@ -192,10 +236,26 @@ async function fetchLast24hNormalizedSorted() {
         durak: r.durak || "",
         gun: r.gun || "",
         vardiya: r.vardiya || "",
+        ilce: r.ilce || "",
         createdAt: r.created_at || r.createdAt || r.inserted_at || r.insertedAt || null
     }));
 
     normalized.sort((a, b) => {
+        const getIlceOrder = (ilce) => {
+            const ilceStr = ilce || '';
+            if (ilceStr.toLowerCase() === 'çerkezköy') return 0;
+            if (ilceStr.toLowerCase() === 'kapaklı') return 1;
+            return 2; // Diğer ilçeler
+        };
+
+        const orderA = getIlceOrder(a.ilce);
+        const orderB = getIlceOrder(b.ilce);
+        if (orderA !== orderB) return orderA - orderB;
+
+        // Aynı ilçe grubu içindeyse, ilçe adına göre alfabetik sırala
+        const ai = (a.ilce || "").localeCompare(b.ilce || "", 'tr');
+        if (ai !== 0) return ai;
+
         const ag = (a.gun || "").localeCompare(b.gun || "", 'tr');
         if (ag !== 0) return ag;
         const av = (a.vardiya || "").localeCompare(b.vardiya || "", 'tr');
@@ -220,6 +280,7 @@ async function loadAndRenderTable() {
     try {
         const normalized = await fetchLast24hNormalizedSorted();
         const fragment = document.createDocumentFragment();
+        let currentIlce = null;
         let currentGun = null;
         let currentVardiya = null;
         let colorIndex = 0;
@@ -231,26 +292,42 @@ async function loadAndRenderTable() {
             'table-secondary'
         ];
         for (const it of normalized) {
+            // İlçe değişimlerinde ana grup başlığı ekle
+            if (it.ilce !== currentIlce) {
+                currentIlce = it.ilce;
+                currentGun = null; // Alt grupları sıfırla
+                currentVardiya = null;
+                const sepTr = document.createElement('tr');
+                sepTr.className = 'table-dark'; // Ana grup için belirgin bir stil
+                const sepTh = document.createElement('th');
+                sepTh.setAttribute('colspan', '7');
+                sepTh.className = 'text-center';
+                sepTh.style.fontSize = '1.1rem';
+                sepTh.textContent = `İlçe: ${currentIlce || 'Diğer'}`;
+                sepTr.appendChild(sepTh);
+                fragment.appendChild(sepTr);
+            }
+
             if (it.gun !== currentGun) {
                 currentGun = it.gun;
-                currentVardiya = null; // gün değişince vardiya takibini sıfırla
+                currentVardiya = null;
                 const sepTr = document.createElement('tr');
                 const cls = dayClasses[colorIndex % dayClasses.length];
                 sepTr.className = cls;
                 const sepTh = document.createElement('th');
-                sepTh.setAttribute('colspan', '6');
+                sepTh.setAttribute('colspan', '7');
                 sepTh.className = 'text-start';
                 sepTh.textContent = `Gün: ${currentGun || '-'}`;
                 sepTr.appendChild(sepTh);
                 fragment.appendChild(sepTr);
                 colorIndex += 1;
             }
-            // Vardiya değişimlerinde ince ayraç ekle (aynı gün içinde)
+            // Vardiya değişimlerinde ayraç ekle
             if (currentVardiya !== null && it.vardiya !== currentVardiya) {
                 const vSepTr = document.createElement('tr');
                 const vSepTh = document.createElement('th');
-                vSepTh.setAttribute('colspan', '6');
-                vSepTh.className = 'text-start';
+                vSepTh.setAttribute('colspan', '7');
+                vSepTh.className = 'text-center';
                 vSepTh.style.padding = '4px 8px';
                 vSepTh.style.backgroundColor = '#e9ecef';
                 vSepTh.style.borderTop = '2px solid #6c757d';
@@ -266,12 +343,14 @@ async function loadAndRenderTable() {
             const tdGun = document.createElement('td'); tdGun.textContent = it.gun;
             const tdVardiya = document.createElement('td'); tdVardiya.textContent = it.vardiya;
             const tdDurak = document.createElement('td'); tdDurak.textContent = it.durak;
+            const tdIlce = document.createElement('td'); tdIlce.textContent = it.ilce || '';
             const tdAdSoyad = document.createElement('td'); tdAdSoyad.textContent = it.adSoyad;
             const tdBolum = document.createElement('td'); tdBolum.textContent = it.bolum;
-            const tdCreated = document.createElement('td'); tdCreated.textContent = it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : '';
+            const tdCreated = document.createElement('td'); tdCreated.textContent = it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) : '';
             tr.appendChild(tdGun);
             tr.appendChild(tdVardiya);
             tr.appendChild(tdDurak);
+            tr.appendChild(tdIlce);
             tr.appendChild(tdAdSoyad);
             tr.appendChild(tdBolum);
             tr.appendChild(tdCreated);
@@ -287,66 +366,97 @@ async function loadAndRenderTable() {
 async function handlePdfDownload() {
     try {
         const normalized = await fetchLast24hNormalizedSorted();
-        const tableRows = [];
-        for (const it of normalized) {
-            tableRows.push([
-                it.gun,
-                it.vardiya,
-                it.durak,
-                it.adSoyad,
-                it.bolum,
-                it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR') : ""
-            ]);
+        if (normalized.length === 0) {
+            alert("PDF oluşturmak için veri bulunamadı.");
+            return;
         }
 
-        if (!window.jspdf) {
-            alert("jsPDF yüklenemedi. Lütfen sayfayı yenileyin.");
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            alert("PDF oluşturma kütüphanesi (jsPDF) yüklenemedi. Lütfen sayfayı yenileyin.");
             return;
         }
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.setFontSize(14);
-        doc.text("Son 24 Saatte Kaydedilen Personeller", 14, 16);
 
-        let currentY = 22;
-        if (doc.autoTable) {
-            doc.autoTable({
-                head: [["Gün", "Vardiya", "Durak", "Ad Soyad", "Bölüm", "Oluşturulma"]],
-                body: tableRows,
-                startY: currentY,
-                margin: { left: 14, right: 14 },
-                styles: { fontSize: 10 }
-            });
-        } else {
-            // AutoTable yoksa basit liste
-            let y = currentY;
-            doc.setFontSize(10);
-            const header = "Gün | Vardiya | Durak | Ad Soyad | Bölüm | Oluşturulma";
-            doc.text(header, 14, y);
-            y += 6;
-            for (const row of tableRows) {
-                const line = row.join(" | ");
-                doc.text(line, 14, y);
-                y += 6;
-                if (y > 280) {
-                    doc.addPage();
-                    y = 16;
-                }
+        doc.setFontSize(16);
+        doc.text("Gelecek Personellerin Listesi", 14, 16);
+
+        const tableBody = [];
+        let currentIlce = null;
+        let currentGun = null;
+        let currentVardiya = null;
+        let colorIndex = 0;
+        const dayColors = [
+            [222, 235, 255], // table-primary
+            [213, 245, 227], // table-success
+            [255, 243, 205], // table-warning
+            [207, 244, 252], // table-info
+            [231, 233, 235]  // table-secondary
+        ];
+
+        normalized.forEach(it => {
+            // İlçe ayraç satırı
+            if (it.ilce !== currentIlce) {
+                currentIlce = it.ilce;
+                currentGun = null; // Alt grupları sıfırla
+                currentVardiya = null;
+                tableBody.push([{
+                    content: `İlçe: ${currentIlce || 'Diğer'}`,
+                    colSpan: 7,
+                    styles: { fillColor: [52, 58, 64], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 11 }
+                }]);
             }
-        }
 
-        doc.save("son24saat_secilen_personeller.pdf");
+            // Gün ayraç satırı
+            if (it.gun !== currentGun) {
+                currentGun = it.gun;
+                currentVardiya = null;
+                const color = dayColors[colorIndex % dayColors.length];
+                colorIndex++;
+                tableBody.push([{
+                    content: `Gün: ${currentGun || '-'}`,
+                    colSpan: 7,
+                    styles: { fillColor: color, textColor: 20, fontStyle: 'bold', halign: 'left' }
+                }]);
+            }
+
+            // Vardiya ayraç satırı
+            if (it.vardiya !== currentVardiya) {
+                currentVardiya = it.vardiya;
+                tableBody.push([{
+                    content: `Vardiya: ${it.vardiya || '-'}`,
+                    colSpan: 7,
+                    styles: { fillColor: [233, 236, 239], textColor: 20, fontStyle: 'bold', halign: 'center' }
+                }]);
+            }
+
+            // Personel veri satırı
+            tableBody.push([
+                it.gun, it.vardiya, it.durak, it.ilce || "", it.adSoyad, it.bolum,
+                it.createdAt ? new Date(it.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) : ""
+            ]);
+        });
+
+        doc.autoTable({
+            head: [["Gün", "Vardiya", "Durak", "İlçe", "Ad Soyad", "Bölüm", "Oluşturulma"]],
+            body: tableBody,
+            startY: 22,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+        });
+
+        doc.save("Gelecek_Personeller_Listesi.pdf");
     } catch (e) {
-        console.error(e);
-        alert("PDF oluşturulurken bir hata oluştu.");
+        console.error("PDF oluşturulurken bir hata oluştu:", e);
+        alert("PDF oluşturulurken bir hata oluştu: " + e.message);
     }
 }
 
 const pdfBtnEl = document.getElementById("pdfBtn");
 if (pdfBtnEl) pdfBtnEl.addEventListener("click", handlePdfDownload);
+
 document.addEventListener('DOMContentLoaded', () => {
-  const b = document.getElementById('pdfBtn');
-  if (b) b.addEventListener('click', handlePdfDownload);
-  // Sayfa yüklendiğinde tabloyu doldur
-  loadAndRenderTable();
+    // Sayfa yüklendiğinde tabloyu doldur
+    loadAndRenderTable();
 });
