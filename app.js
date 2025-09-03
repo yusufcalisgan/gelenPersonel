@@ -242,7 +242,7 @@ async function fetchLast24hNormalizedSorted() {
 
     normalized.sort((a, b) => {
         const getIlceOrder = (ilce) => {
-            const ilceStr = ilce || '';
+            const ilceStr = (ilce || '').toLowerCase();
             if (ilceStr.toLowerCase() === 'çerkezköy') return 0;
             if (ilceStr.toLowerCase() === 'kapaklı') return 1;
             return 2; // Diğer ilçeler
@@ -253,15 +253,24 @@ async function fetchLast24hNormalizedSorted() {
         if (orderA !== orderB) return orderA - orderB;
 
         // Aynı ilçe grubu içindeyse, ilçe adına göre alfabetik sırala
-        const ai = (a.ilce || "").localeCompare(b.ilce || "", 'tr');
-        if (ai !== 0) return ai;
+        const ilceA = (a.ilce || "").toLocaleLowerCase('tr');
+        const ilceB = (b.ilce || "").toLocaleLowerCase('tr');
+        if (ilceA.localeCompare(ilceB, 'tr') !== 0) return ilceA.localeCompare(ilceB, 'tr');
 
+        // İlçe aynıysa, güne göre sırala
         const ag = (a.gun || "").localeCompare(b.gun || "", 'tr');
         if (ag !== 0) return ag;
+        // Gün aynıysa, vardiyaya göre sırala
         const av = (a.vardiya || "").localeCompare(b.vardiya || "", 'tr');
         if (av !== 0) return av;
+        // Vardiya aynıysa, durağa göre sırala
         const ad = (a.durak || "").localeCompare(b.durak || "", 'tr');
         if (ad !== 0) return ad;
+        // Son olarak bölüme göre sırala
+        const bolumA = (a.bolum || "").localeCompare(b.bolum || "", 'tr');
+        if (bolumA !== 0) return bolumA;
+
+        // En son oluşturulma tarihine göre sırala
         const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return at - bt;
@@ -293,8 +302,11 @@ async function loadAndRenderTable() {
         ];
         for (const it of normalized) {
             // İlçe değişimlerinde ana grup başlığı ekle
-            if (it.ilce !== currentIlce) {
-                currentIlce = it.ilce;
+            const normalizedIlce = (it.ilce || "").toLocaleLowerCase('tr');
+            const currentNormalizedIlce = (currentIlce || "").toLocaleLowerCase('tr');
+
+            if (normalizedIlce !== currentNormalizedIlce) {
+                currentIlce = it.ilce; // Orijinal büyük/küçük harfli halini sakla
                 currentGun = null; // Alt grupları sıfırla
                 currentVardiya = null;
                 const sepTr = document.createElement('tr');
