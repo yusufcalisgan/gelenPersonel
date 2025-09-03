@@ -157,6 +157,10 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
         return;
     }
     
+    // Butonu pasif yap ve metnini değiştir
+    gonderBtn.disabled = true;
+    gonderBtn.textContent = "Gönderiliyor...";
+
     try {
         // Tüm geçici verileri Supabase'e gönder
         const { error } = await sb.from(HEDEF_TABLO).insert(tempPersonelData);
@@ -164,6 +168,9 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
         if (error) {
             console.error("Veriler gönderilirken hata:", error);
             alert("Veriler gönderilirken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
+            // Hata durumunda butonu tekrar aktif et
+            gonderBtn.disabled = false;
+            gonderBtn.textContent = "Gönder";
             return;
         }
         
@@ -179,6 +186,12 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
     } catch (err) {
         console.error("Gönderim sırasında hata:", err);
         alert("Gönderim sırasında bir hata oluştu: " + err.message);
+    } finally {
+        // 30 saniye sonra butonu tekrar aktif hale getir
+        setTimeout(() => {
+            gonderBtn.disabled = false;
+            gonderBtn.textContent = "Gönder";
+        }, 30000); // 30 saniye
     }
 });
 
@@ -276,7 +289,19 @@ async function fetchLast24hNormalizedSorted() {
         return at - bt;
     });
 
-    return normalized;
+    // Tekilleştirme adımı
+    const uniqueEntries = new Set();
+    const uniqueNormalized = normalized.filter(entry => {
+        // Her bir kayıt için benzersiz bir anahtar oluştur (adSoyad + gün + vardiya)
+        const key = `${entry.adSoyad}|${entry.gun}|${entry.vardiya}`;
+        if (uniqueEntries.has(key)) {
+            return false; // Bu anahtar daha önce eklendi, bu kaydı atla
+        }
+        uniqueEntries.add(key);
+        return true; // Bu anahtar yeni, bu kaydı tut
+    });
+
+    return uniqueNormalized;
 }
 
 // HTML tabloyu doldur

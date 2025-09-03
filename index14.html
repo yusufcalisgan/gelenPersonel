@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vardiya Personel Sayı Özeti</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .table th, .table td {
+            text-align: center;
+            vertical-align: middle;
+            padding: 0.4rem;
+            font-size: 0.9rem;
+            border: 1px solid #dee2e6;
+        }
+        .day-header {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        .bolum-col {
+            font-weight: bold;
+            text-align: left;
+            background-color: #f8f9fa;
+        }
+        .empty-col {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="app14.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Personel Sayı Özeti</h1>
+        <div class="text-center mb-4">
+            <a href="index15.html" class="btn btn-info">Detaylı Personel Listesini Gör</a>
+            <a href="index.html" class="btn btn-primary">Veri Giriş Sayfasına Git</a>
+        </div>
+        <div class="table-responsive mb-4">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr class="day-header">
+                        <th colspan="6">Cuma</th>
+                        <th class="empty-col"></th>
+                        <th colspan="6">Cumartesi</th>
+                        <th class="empty-col"></th>
+                        <th colspan="6">Pazar</th>
+                    </tr>
+                    <tr>
+                        <th>BÖLÜM</th>
+                        <th>08-20</th>
+                        <th>20-08</th>
+                        <th>08-16</th>
+                        <th>16-24</th>
+                        <th>24-08</th>
+                        <th class="empty-col"></th>
+                        <th>BÖLÜM</th>
+                        <th>08-20</th>
+                        <th>20-08</th>
+                        <th>08-16</th>
+                        <th>16-24</th>
+                        <th>24-08</th>
+                        <th class="empty-col"></th>
+                        <th>BÖLÜM</th>
+                        <th>08-20</th>
+                        <th>20-08</th>
+                        <th>08-16</th>
+                        <th>16-24</th>
+                        <th>24-08</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryBody">
+                    <!-- Veriler JS ile buraya eklenecek -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
