@@ -288,6 +288,7 @@ async function loadAndRenderTable() {
     tbody.innerHTML = '';
     try {
         const normalized = await fetchLast24hNormalizedSorted();
+        renderSummaryTable(normalized); // Özet tabloyu doldurma fonksiyonunu çağır
         const fragment = document.createDocumentFragment();
         let currentIlce = null;
         let currentGun = null;
@@ -372,6 +373,43 @@ async function loadAndRenderTable() {
     } catch (err) {
         console.error('Tablo verileri yüklenirken hata:', err);
     }
+}
+
+// Özet tabloyu oluşturan fonksiyon
+function renderSummaryTable(data) {
+    const summaryTable = document.getElementById('summaryTable');
+    if (!summaryTable) return;
+    const tbody = summaryTable.querySelector('tbody');
+    if (!tbody) return;
+
+    // Verileri bölüm, gün ve vardiyaya göre grupla ve say
+    const summary = data.reduce((acc, curr) => {
+        const key = `${curr.bolum}|${curr.gun}|${curr.vardiya}`;
+        if (!acc[key]) {
+            acc[key] = {
+                bolum: curr.bolum,
+                gun: curr.gun,
+                vardiya: curr.vardiya,
+                count: 0
+            };
+        }
+        acc[key].count++;
+        return acc;
+    }, {});
+
+    // Gruplanmış verileri tabloya ekle
+    tbody.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    Object.values(summary).forEach(item => {
+        const tr = document.createElement('tr');
+        const tdBolum = document.createElement('td'); tdBolum.textContent = item.bolum;
+        const tdGun = document.createElement('td'); tdGun.textContent = item.gun;
+        const tdVardiya = document.createElement('td'); tdVardiya.textContent = item.vardiya;
+        const tdCount = document.createElement('td'); tdCount.textContent = item.count;
+        tr.append(tdBolum, tdGun, tdVardiya, tdCount);
+        fragment.appendChild(tr);
+    });
+    tbody.appendChild(fragment);
 }
 
 // Son 24 saatte eklenen kayıtları PDF'e aktar
