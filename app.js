@@ -39,12 +39,12 @@ document.querySelectorAll(".vardiya-cell").forEach(cell => {
             alert("Lütfen önce bir bölüm seçiniz.");
             return;
         }
-        
+
         // Önceki aktif hücre varsa pasif yap
         if (aktifVardiyaHucresi) {
             aktifVardiyaHucresi.classList.remove("active");
         }
-        
+
         // Şu anki hücreyi aktif yap
         aktifVardiyaHucresi = cell;
         aktifVardiyaHucresi.classList.add("active");
@@ -74,7 +74,7 @@ async function fetchPersonelListesi(bolum) {
         if (personelModal) personelModal.show();
         return;
     }
-    
+
     personelData.forEach(personel => {
         const li = document.createElement("li");
         li.className = "list-group-item";
@@ -86,15 +86,15 @@ async function fetchPersonelListesi(bolum) {
         if (personel.ilce) {
             li.dataset.ilce = personel.ilce;
         }
-        
+
         li.addEventListener("click", () => {
             // Tıklandığında aktif/pasif hale getir ve rengini değiştir
             li.classList.toggle("active");
         });
-        
+
         personelListesi.appendChild(li);
     });
-    
+
     // Personel listesi hazır olunca modalı göster
     if (personelModal) personelModal.show();
 }
@@ -114,11 +114,11 @@ if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", () => {
 
     // Modal içindeki 'active' class'ına sahip personelleri bulalım
     const seciliPersoneller = Array.from(personelListesi.querySelectorAll(".active"))
-                                   .map(li => ({
-                                       adSoyad: li.textContent.trim(),
-                                       durak: li.dataset.durak || null,
-                                       ilce: li.dataset.ilce || null
-                                   }));
+        .map(li => ({
+            adSoyad: li.textContent.trim(),
+            durak: li.dataset.durak || null,
+            ilce: li.dataset.ilce || null
+        }));
 
     // Seçilen personel sayısı 0 ise uyarı ver
     if (seciliPersoneller.length === 0) {
@@ -128,9 +128,9 @@ if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", () => {
 
     // Vardiya hücresine seçilen personel sayısını yaz
     aktifCell.textContent = seciliPersoneller.length;
-    
+
     // Hücredeki 'active' class'ını kaldır ve rengini normale döndür
-    aktifCell.classList.remove("active"); 
+    aktifCell.classList.remove("active");
 
     // Geçici veriye ekle (Supabase'e henüz kaydetme)
     for (const personel of seciliPersoneller) {
@@ -144,7 +144,7 @@ if (modalKaydetBtn) modalKaydetBtn.addEventListener("click", () => {
         };
         tempPersonelData.push(data);
     }
-    
+
     // İşlem bitince modal penceresini kapat
     if (personelModal) personelModal.hide();
 });
@@ -156,7 +156,7 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
         alert("Gönderilecek veri bulunamadı. Lütfen önce personel seçimi yapın.");
         return;
     }
-    
+
     // Butonu pasif yap ve metnini değiştir
     gonderBtn.disabled = true;
     gonderBtn.textContent = "Gönderiliyor...";
@@ -164,7 +164,7 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
     try {
         // Tüm geçici verileri Supabase'e gönder
         const { error } = await sb.from(HEDEF_TABLO).insert(tempPersonelData);
-        
+
         if (error) {
             console.error("Veriler gönderilirken hata:", error);
             alert("Veriler gönderilirken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
@@ -173,15 +173,15 @@ if (gonderBtn) gonderBtn.addEventListener("click", async () => {
             gonderBtn.textContent = "Gönder";
             return;
         }
-        
+
         // Başarılı gönderim sonrası geçici veriyi temizle
         tempPersonelData = [];
-        
+
         // Tüm vardiya hücrelerini sıfırla
         document.querySelectorAll(".vardiya-cell").forEach(cell => {
             cell.textContent = "0";
         });
-        
+
         alert("Başarıyla Veriler Gönderildi!");
     } catch (err) {
         console.error("Gönderim sırasında hata:", err);
@@ -201,45 +201,45 @@ if (temizleBtn) temizleBtn.addEventListener("click", () => {
     if (confirm("Tüm veriler temizlenecek ve sayfa yenilenecek. Devam etmek istiyor musunuz?")) {
         // Geçici veriyi temizle
         tempPersonelData = [];
-        
+
         // Tüm vardiya hücrelerini sıfırla
         document.querySelectorAll(".vardiya-cell").forEach(cell => {
             cell.textContent = "0";
         });
-        
+
         // Bölüm seçimini sıfırla
         const bolumSecimi = document.getElementById("bolumSecimi");
         if (bolumSecimi) {
             bolumSecimi.value = "";
         }
-        
+
         // Sayfayı yenile
         location.reload();
     }
 });
 
-// Son 24 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
-async function fetchLast24hNormalizedSorted() {
-        const now = new Date();
-        const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-        let data = [];
-            let query = sb.from(HEDEF_TABLO).select("*");
-            try {
-                const res = await query.gte('created_at', yesterdayIso);
-                if (res.error && res.error.code === '42703') {
+// Son 48 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
+async function fetchLast48hNormalizedSorted() {
+    const now = new Date();
+    const timeLimitIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+    let data = [];
+    let query = sb.from(HEDEF_TABLO).select("*");
+    try {
+        const res = await query.gte('created_at', timeLimitIso);
+        if (res.error && res.error.code === '42703') {
             // created_at yoksa tümünü çek ve client-side filtrele
-                    const resAll = await sb.from(HEDEF_TABLO).select("*");
-                    if (resAll.error) throw resAll.error;
-                    data = (resAll.data || []).filter(r => {
-                        const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                        return ts ? new Date(ts).getTime() >= (now.getTime() - 24 * 60 * 60 * 1000) : true;
-                    });
-                } else if (res.error) {
-                    throw res.error;
-                } else {
-                    data = res.data || [];
-                }
-            } catch (err) {
+            const resAll = await sb.from(HEDEF_TABLO).select("*");
+            if (resAll.error) throw resAll.error;
+            data = (resAll.data || []).filter(r => {
+                const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
+                return ts ? new Date(ts).getTime() >= (now.getTime() - 48 * 60 * 60 * 1000) : true;
+            });
+        } else if (res.error) {
+            throw res.error;
+        } else {
+            data = res.data || [];
+        }
+    } catch (err) {
         throw err;
     }
 
@@ -312,7 +312,7 @@ async function loadAndRenderTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     try {
-        const normalized = await fetchLast24hNormalizedSorted();
+        const normalized = await fetchLast48hNormalizedSorted();
         renderSummaryTable(normalized); // Özet tabloyu doldurma fonksiyonunu çağır
         const fragment = document.createDocumentFragment();
         let currentIlce = null;
@@ -437,10 +437,10 @@ function renderSummaryTable(data) {
     tbody.appendChild(fragment);
 }
 
-// Son 24 saatte eklenen kayıtları PDF'e aktar
+// Son 48 saatte eklenen kayıtları PDF'e aktar
 async function handlePdfDownload() {
     try {
-        const normalized = await fetchLast24hNormalizedSorted();
+        const normalized = await fetchLast48hNormalizedSorted();
         if (normalized.length === 0) {
             alert("PDF oluşturmak için veri bulunamadı.");
             return;
