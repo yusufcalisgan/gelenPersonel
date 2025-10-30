@@ -4,14 +4,7 @@ const API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const sb = window.supabase.createClient(SUPABASE_URL, API_KEY);
 
 const HEDEF_TABLO = "secilenPersonellerListesi";
-const GUNLER = [
-    "24.10.2025 Cuma", 
-    "25.10.2025 Cumartesi", 
-    "26.10.2025 Pazar", 
-    "27.10.2025 Pazartesi", 
-    "28.10.2025 Salı", 
-    "29.10.2025 Çarşamba"
-];
+const GUNLER = ["Cuma", "Cumartesi", "Pazar"];
 const VARDIYALAR = ["08-20", "20-08", "08-16", "16-24", "24-08"];
 
 /**
