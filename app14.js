@@ -4,20 +4,20 @@ const API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const sb = window.supabase.createClient(SUPABASE_URL, API_KEY);
 
 const HEDEF_TABLO = "secilenPersonellerListesi";
-const GUNLER = ["Cuma", "Cumartesi", "Pazar"];
+const GUNLER = ["23 Mayıs", "24 Mayıs", "25 Mayıs", "26 Mayıs", "27 Mayıs", "28 Mayıs", "29 Mayıs", "30 Mayıs", "31 Mayıs"];
 const VARDIYALAR = ["08-20", "20-08", "08-16", "16-24", "24-08"];
 
 /**
- * Son 24 saatteki verileri Supabase'den çeker.
+ * Belirlenen tarih aralığındaki verileri Supabase'den çeker (Örn: Son 10 gün).
  */
 async function fetchLast24hData() {
     const now = new Date();
-    const yesterdayIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const timeLimitIso = new Date(now.getTime() - 240 * 60 * 60 * 1000).toISOString();
 
     const { data, error } = await sb
         .from(HEDEF_TABLO)
         .select("bolum, gun, vardiya")
-        .gte('created_at', yesterdayIso);
+        .gte('created_at', timeLimitIso);
 
     if (error) {
         console.error("Veri çekilirken hata:", error);
