@@ -31,14 +31,6 @@ const personelModal = personelModalEl && window.bootstrap ? new bootstrap.Modal(
 const personelListesi = document.getElementById('personelListesi');
 let aktifVardiyaHucresi = null; // Tıklanan hücreyi tutacak değişken
 
-/**
- * Personel nesnesinden uygun isim bilgisini merkezi olarak döner.
- * @param {Object} personel 
- */
-function getPersonelAdSoyad(personel) {
-    return personel.adSoyad || personel.isim || personel.ad_soyad || personel.adsoyad || [personel.ad, personel.soyad].filter(Boolean).join(' ') || "İsimsiz";
-}
-
 // Bütün vardiya hücrelerine tıklama olayı ekle
 document.querySelectorAll(".vardiya-cell").forEach(cell => {
     cell.addEventListener("click", () => {
@@ -60,43 +52,6 @@ document.querySelectorAll(".vardiya-cell").forEach(cell => {
         fetchPersonelListesi(bolum);
     });
 });
-
-// Bölüm seçildiğinde veritabanındaki mevcut sayıları getir
-const bolumSecimiEl = document.getElementById("bolumSecimi");
-if (bolumSecimiEl) {
-    bolumSecimiEl.addEventListener("change", async () => {
-        const bolum = bolumSecimiEl.value;
-        const cells = document.querySelectorAll(".vardiya-cell");
-        
-        // Hücreleri sıfırla
-        cells.forEach(cell => cell.textContent = "0");
-        
-        if (!bolum) return;
-
-        // Supabase'den bu bölüme ait kayıtları çek
-        const { data, error } = await sb
-            .from(HEDEF_TABLO)
-            .select("gun, vardiya")
-            .eq("bolum", bolum);
-
-        if (error) {
-            console.error("Mevcut sayılar yüklenirken hata:", error);
-            return;
-        }
-
-        // Sayıları hesapla ve hücrelere yaz
-        const counts = {};
-        data.forEach(r => {
-            const key = `${r.gun}|${r.vardiya}`;
-            counts[key] = (counts[key] || 0) + 1;
-        });
-
-        cells.forEach(cell => {
-            const key = `${cell.dataset.gun}|${cell.dataset.vardiya}`;
-            if (counts[key]) cell.textContent = counts[key];
-        });
-    });
-}
 
 // Supabase'den personel listesini çekecek fonksiyon
 async function fetchPersonelListesi(bolum) {
@@ -123,7 +78,8 @@ async function fetchPersonelListesi(bolum) {
     personelData.forEach(personel => {
         const li = document.createElement("li");
         li.className = "list-group-item";
-        li.textContent = getPersonelAdSoyad(personel);
+        const adSoyad = personel.adSoyad || personel.isim || personel.ad_soyad || personel.adsoyad || [personel.ad, personel.soyad].filter(Boolean).join(' ') || "İsimsiz";
+        li.textContent = adSoyad;
         if (personel.durak) {
             li.dataset.durak = personel.durak;
         }
@@ -265,8 +221,7 @@ if (temizleBtn) temizleBtn.addEventListener("click", () => {
 // Son 48 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
 async function fetchLast48hNormalizedSorted() {
     const now = new Date();
-    // 48 saat yerine 10 günlük (240 saat) veriyi çekerek 23-31 Mayıs aralığını kapsıyoruz
-    const timeLimitIso = new Date(now.getTime() - 240 * 60 * 60 * 1000).toISOString();
+    const timeLimitIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
     let data = [];
     let query = sb.from(HEDEF_TABLO).select("*");
     try {
@@ -277,7 +232,7 @@ async function fetchLast48hNormalizedSorted() {
             if (resAll.error) throw resAll.error;
             data = (resAll.data || []).filter(r => {
                 const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                return ts ? new Date(ts).getTime() >= (now.getTime() - 240 * 60 * 60 * 1000) : true;
+                return ts ? new Date(ts).getTime() >= (now.getTime() - 48 * 60 * 60 * 1000) : true;
             });
         } else if (res.error) {
             throw res.error;
@@ -289,7 +244,7 @@ async function fetchLast48hNormalizedSorted() {
     }
 
     const normalized = (data || []).map((r) => ({
-        adSoyad: getPersonelAdSoyad(r),
+        adSoyad: r.adSoyad || r.isim || "",
         bolum: r.bolum || "",
         durak: r.durak || "",
         gun: r.gun || "",
@@ -359,7 +314,6 @@ async function loadAndRenderTable() {
     try {
         const normalized = await fetchLast48hNormalizedSorted();
         renderSummaryTable(normalized); // Özet tabloyu doldurma fonksiyonunu çağır
-        renderComplexSummary(normalized); // index14 için karmaşık özet tabloyu doldur
         const fragment = document.createDocumentFragment();
         let currentIlce = null;
         let currentGun = null;
@@ -481,52 +435,6 @@ function renderSummaryTable(data) {
         fragment.appendChild(tr);
     });
     tbody.appendChild(fragment);
-}
-
-// index14.html'deki çapraz tabloyu (Cuma-Cmt-Paz yan yana) dolduran fonksiyon
-function renderComplexSummary(data) {
-    const summaryBody = document.getElementById('summaryBody');
-    if (!summaryBody) return;
-
-    // Veriyi Bölüm -> Gün -> Vardiya şeklinde grupla
-    const nested = {};
-    data.forEach(item => {
-        if (!nested[item.bolum]) nested[item.bolum] = {};
-        if (!nested[item.bolum][item.gun]) nested[item.bolum][item.gun] = {};
-        nested[item.bolum][item.gun][item.vardiya] = (nested[item.bolum][item.gun][item.vardiya] || 0) + 1;
-    });
-
-    const gunler = ["23 Mayıs", "24 Mayıs", "25 Mayıs", "26 Mayıs", "27 Mayıs", "28 Mayıs", "29 Mayıs", "30 Mayıs", "31 Mayıs"];
-    const vardiyalar = ["08-20", "20-08", "08-16", "16-24", "24-08"];
-    const bolumler = ["İplik", "Örme", "Boyahane", "Baskı", "Kuru Bölüm", "Depo", "Bakım"];
-
-    summaryBody.innerHTML = '';
-    bolumler.forEach(bolum => {
-        const tr = document.createElement('tr');
-        
-        gunler.forEach((gun, gIdx) => {
-            // Her günün başında Bölüm adını yaz (ilk kolon)
-            const tdBolum = document.createElement('td');
-            tdBolum.className = 'bolum-col';
-            tdBolum.textContent = bolum;
-            tr.appendChild(tdBolum);
-
-            // Vardiya sayılarını yaz
-            vardiyalar.forEach(vardiya => {
-                const td = document.createElement('td');
-                td.textContent = (nested[bolum] && nested[bolum][gun] && nested[bolum][gun][vardiya]) || 0;
-                tr.appendChild(td);
-            });
-
-            // Günler arasına boşluk kolonu ekle (Pazar'dan sonra ekleme)
-            if (gIdx < gunler.length - 1) {
-                const tdEmpty = document.createElement('td');
-                tdEmpty.className = 'empty-col';
-                tr.appendChild(tdEmpty);
-            }
-        });
-        summaryBody.appendChild(tr);
-    });
 }
 
 // Son 48 saatte eklenen kayıtları PDF'e aktar
