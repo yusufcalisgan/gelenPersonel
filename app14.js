@@ -4,7 +4,7 @@ const API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const sb = window.supabase.createClient(SUPABASE_URL, API_KEY);
 
 const HEDEF_TABLO = "secilenPersonellerListesi";
-const GUNLER = ["Cuma", "Cumartesi", "Pazar"];
+const GUNLER = ["Cumartesi", "Pazar"];
 const VARDIYALAR = ["08-20", "20-08", "08-16", "16-24", "24-08"];
 
 /**
