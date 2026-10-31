@@ -218,10 +218,10 @@ if (temizleBtn) temizleBtn.addEventListener("click", () => {
     }
 });
 
-// Son 72 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
-async function fetchLast72hNormalizedSorted() {
+// Son 48 saatte eklenen kayıtları getirip normalize eden yardımcı fonksiyon
+async function fetchLast48hNormalizedSorted() {
     const now = new Date();
-    const timeLimitIso = new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString();
+    const timeLimitIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
     let data = [];
     let query = sb.from(HEDEF_TABLO).select("*");
     try {
@@ -232,7 +232,7 @@ async function fetchLast72hNormalizedSorted() {
             if (resAll.error) throw resAll.error;
             data = (resAll.data || []).filter(r => {
                 const ts = r.created_at || r.createdAt || r.inserted_at || r.insertedAt;
-                return ts ? new Date(ts).getTime() >= (now.getTime() - 72 * 60 * 60 * 1000) : true;
+                return ts ? new Date(ts).getTime() >= (now.getTime() - 48 * 60 * 60 * 1000) : true;
             });
         } else if (res.error) {
             throw res.error;
@@ -312,7 +312,7 @@ async function loadAndRenderTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     try {
-        const normalized = await fetchLast72hNormalizedSorted();
+        const normalized = await fetchLast48hNormalizedSorted();
         renderSummaryTable(normalized); // Özet tabloyu doldurma fonksiyonunu çağır
         const fragment = document.createDocumentFragment();
         let currentIlce = null;
@@ -437,10 +437,10 @@ function renderSummaryTable(data) {
     tbody.appendChild(fragment);
 }
 
-// Son 72 saatte eklenen kayıtları PDF'e aktar
+// Son 48 saatte eklenen kayıtları PDF'e aktar
 async function handlePdfDownload() {
     try {
-        const normalized = await fetchLast72hNormalizedSorted();
+        const normalized = await fetchLast48hNormalizedSorted();
         if (normalized.length === 0) {
             alert("PDF oluşturmak için veri bulunamadı.");
             return;
